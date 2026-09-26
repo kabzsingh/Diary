@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1C2238">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>My Diary</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#EEF0F5; --surface:#FFFFFF; --ink:#1C2238; --muted:#646B82; --line:#D7DBE6;
+  --lamp:#E3A23B; --lamp-soft:#F7E6C4; --lamp-ink:#6E470A; --danger:#B3261E;
+  --serif:"Newsreader", Georgia, "Times New Roman", serif;
+  --sans:"Manrope", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){
+  :root{ --bg:#141827; --surface:#1D2236; --ink:#E8EAF2; --muted:#9AA1B8; --line:#2C3350;
+    --lamp:#F0B452; --lamp-soft:#3A3322; --lamp-ink:#F6D59A; --danger:#FF8A80; }
+}
+*,*::before,*::after{box-sizing:inherit}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:16px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+button,input,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--lamp);outline-offset:2px}
+.wrap{max-width:560px;margin:0 auto;padding:16px 16px 48px}
+.hidden{display:none!important}
+
+/* auth */
+.auth{min-height:80vh;display:flex;flex-direction:column;justify-content:center;gap:14px}
+.auth h1{font:500 44px/1.05 var(--serif);margin:0 0 4px;letter-spacing:-.01em}
+.auth p{margin:0 0 10px;color:var(--muted)}
+.field{display:flex;flex-direction:column;gap:6px}
+.field label{font-size:14px;font-weight:600}
+.input{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px;width:100%}
+.btn{border:0;border-radius:10px;padding:12px 16px;font-weight:600;background:var(--ink);color:var(--bg)}
+.btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+.btn.lamp{background:var(--lamp);color:#241A06}
+.btn.small{padding:8px 12px;font-size:14px}
+.link{background:none;border:0;padding:0;color:var(--muted);text-decoration:underline;font-size:14px}
+.msg{font-size:14px;color:var(--muted);min-height:1.5em}
+.msg.err{color:var(--danger)}
+
+/* month header */
+.top{display:flex;align-items:flex-end;justify-content:space-between;gap:8px;margin:8px 0 14px}
+.month{font:500 clamp(40px,11vw,56px)/1 var(--serif);letter-spacing:-.02em;margin:0}
+.year{font:400 18px var(--serif);color:var(--muted);margin-left:6px}
+.nav{display:flex;gap:6px}
+.icon-btn{width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:var(--surface);display:grid;place-items:center;font-size:18px}
+
+/* calendar */
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:6px}
+.dow{text-align:center;font-size:12px;font-weight:600;color:var(--muted);padding:4px 0}
+.day{aspect-ratio:1/1.05;border:0;background:transparent;border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;position:relative;font-size:16px;font-weight:500}
+.day.out{color:var(--muted);opacity:.45}
+.day .n{width:34px;height:34px;display:grid;place-items:center;border-radius:50%}
+.day.today .n{box-shadow:inset 0 0 0 2px var(--lamp)}
+.day.sel{background:var(--surface)}
+.day.sel .n{background:var(--ink);color:var(--bg);box-shadow:none}
+.marks{display:flex;gap:3px;height:5px}
+.mark{width:5px;height:5px;border-radius:50%}
+.mark.entry{background:var(--ink)}
+.mark.rem{background:var(--lamp)}
+.legend{display:flex;gap:14px;font-size:13px;color:var(--muted);margin:4px 2px 18px}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+
+/* day panel */
+.panel{background:var(--surface);border-radius:18px;padding:18px 18px 20px;border:1px solid var(--line)}
+.panel h2{font:500 26px/1.15 var(--serif);margin:0 0 14px}
+.moods{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.mood{border:1px solid var(--line);background:transparent;border-radius:999px;padding:6px 12px;font-size:14px}
+.mood[aria-pressed="true"]{background:var(--lamp-soft);border-color:var(--lamp);color:var(--lamp-ink);font-weight:600}
+.title-in{border:0;border-bottom:1px solid var(--line);border-radius:0;padding:8px 0;background:transparent;width:100%;font:500 20px var(--serif)}
+.body-in{border:0;background:transparent;width:100%;min-height:180px;resize:vertical;padding:12px 0;font:400 18px/1.65 var(--serif)}
+.title-in:focus,.body-in:focus{outline:none}
+.save-state{font-size:13px;color:var(--muted);text-align:right;min-height:1.2em}
+
+.section{margin-top:22px;padding-top:18px;border-top:1px solid var(--line)}
+.section h3{font:600 16px var(--sans);margin:0 0 10px}
+.rem-list{list-style:none;margin:0 0 12px;padding:0;display:flex;flex-direction:column;gap:8px}
+.rem-item{display:flex;align-items:flex-start;gap:12px;padding:10px 12px;border-radius:12px;background:var(--bg)}
+.rem-time{font-weight:700;font-variant-numeric:tabular-nums;min-width:48px}
+.rem-text{flex:1;min-width:0}
+.rem-text small{display:block;color:var(--muted)}
+.rem-item.done{opacity:.55}
+.rem-del{border:0;background:none;color:var(--muted);font-size:20px;line-height:1;padding:2px 4px}
+.empty{color:var(--muted);font-size:15px;margin:0 0 12px}
+.rem-form{display:grid;grid-template-columns:110px 1fr;gap:8px}
+.rem-form .full{grid-column:1/-1}
+
+/* notifications bar */
+.notify{margin-top:18px;display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:14px;background:var(--lamp-soft);color:var(--lamp-ink)}
+.notify p{margin:0;flex:1;font-size:14px}
+.notify.on{background:transparent;border:1px solid var(--line);color:var(--muted)}
+.foot{display:flex;justify-content:space-between;align-items:center;margin-top:28px;font-size:14px;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- Sign in -->
+  <section id="auth" class="auth hidden">
+    <h1>My Diary</h1>
+    <p>Write down your days and get reminded of what's coming.</p>
+    <div class="field"><label for="email">Email</label><input id="email" class="input" type="email" autocomplete="email"></div>
+    <div class="field"><label for="pw">Password</label><input id="pw" class="input" type="password" autocomplete="current-password" minlength="6"></div>
+    <button id="authBtn" class="btn">Sign in</button>
+    <button id="authSwitch" class="link">No account yet? Create one</button>
+    <div id="authMsg" class="msg" role="status"></div>
+  </section>
+
+  <!-- App -->
+  <main id="app" class="hidden">
+    <div class="top">
+      <h1 class="month"><span id="monthName"></span><span id="yearName" class="year"></span></h1>
+      <div class="nav">
+        <button class="icon-btn" id="prev" aria-label="Previous month">‹</button>
+        <button class="icon-btn" id="todayBtn" aria-label="Go to today">•</button>
+        <button class="icon-btn" id="next" aria-label="Next month">›</button>
+      </div>
+    </div>
+
+    <div class="cal" id="cal" role="grid"></div>
+    <div class="legend"><span><i class="mark entry"></i>Diary entry</span><span><i class="mark rem"></i>Reminder</span></div>
+
+    <section class="panel" aria-live="polite">
+      <h2 id="dayTitle"></h2>
+      <div class="moods" id="moods" aria-label="How was the day?"></div>
+      <input id="entryTitle" class="title-in" placeholder="Give the day a title" maxlength="120">
+      <textarea id="entryBody" class="body-in" placeholder="What happened today?"></textarea>
+      <div class="save-state" id="saveState"></div>
+
+      <div class="section">
+        <h3>Reminders</h3>
+        <ul class="rem-list" id="remList"></ul>
+        <p class="empty hidden" id="remEmpty">No reminders on this day.</p>
+        <div class="rem-form">
+          <input id="remTime" class="input" type="time" value="08:00" aria-label="Time">
+          <input id="remTitle" class="input" placeholder="Remind me to…" maxlength="120">
+          <input id="remNote" class="input full" placeholder="Extra note (optional)" maxlength="240">
+          <button id="remAdd" class="btn full">Add reminder</button>
+        </div>
+        <div class="msg" id="remMsg" role="status"></div>
+      </div>
+    </section>
+
+    <div class="notify" id="notify">
+      <p id="notifyText">Turn on notifications to get your reminders on this phone.</p>
+      <button class="btn lamp small" id="notifyBtn">Turn on</button>
+    </div>
+
+    <div class="foot"><span id="who"></span><button class="link" id="signOut">Sign out</button></div>
+  </main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script>
+const SB_URL = 'https://nxdjeltyjvhjcdjthhvz.supabase.co';
+const SB_KEY = 'sb_publishable_C61Ne1zqmbFKi_EjFYLZtw_VIEN9_9I';
+const VAPID_PUBLIC = 'BNH2fbaJbx7IJukYgf0aklzEz8_JZwQiyS5LzLZ1lMW2Fc3eXJ0OajMJGCja9j1hG4FhS6lTAioI3WJ-CSDoo74';
+const sb = supabase.createClient(SB_URL, SB_KEY);
+
+const $ = id => document.getElementById(id);
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const DOW = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+const MOODS = ['Great','Good','Okay','Tired','Rough'];
+const pad = n => String(n).padStart(2,'0');
+const keyOf = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const todayKey = () => keyOf(new Date());
+
+let user = null, signUp = false;
+let viewY, viewM, selected = todayKey();
+let entries = {}, reminders = {};
+let saveTimer = null, currentMood = null;
+
+/* ---------- auth ---------- */
+$('authSwitch').onclick = () => {
+  signUp = !signUp;
+  $('authBtn').textContent = signUp ? 'Create account' : 'Sign in';
+  $('authSwitch').textContent = signUp ? 'Already have an account? Sign in' : 'No account yet? Create one';
+  $('authMsg').textContent = '';
+};
+$('authBtn').onclick = async () => {
+  const email = $('email').value.trim(), password = $('pw').value;
+  const m = $('authMsg'); m.className = 'msg';
+  if (!email || password.length < 6) { m.className='msg err'; m.textContent = 'Enter your email and a password of at least 6 characters.'; return; }
+  $('authBtn').disabled = true;
+  const { data, error } = signUp
+    ? await sb.auth.signUp({ email, password, options:{ emailRedirectTo: location.href.split('#')[0] } })
+    : await sb.auth.signInWithPassword({ email, password });
+  $('authBtn').disabled = false;
+  if (error) { m.className='msg err'; m.textContent = error.message; return; }
+  if (signUp && !data.session) m.textContent = 'Check your email and tap the confirmation link, then sign in here.';
+};
+$('signOut').onclick = () => sb.auth.signOut();
+
+sb.auth.onAuthStateChange((_e, session) => {
+  const u = session?.user || null;
+  if (u?.id === user?.id) return;
+  user = u;
+  $('auth').classList.toggle('hidden', !!user);
+  $('app').classList.toggle('hidden', !user);
+  if (user) { $('who').textContent = user.email; const t = new Date(); viewY = t.getFullYear(); viewM = t.getMonth(); loadMonth(); refreshNotify(); }
+});
+
+/* ---------- calendar ---------- */
+$('prev').onclick = () => { viewM--; if (viewM<0){viewM=11;viewY--;} loadMonth(); };
+$('next').onclick = () => { viewM++; if (viewM>11){viewM=0;viewY++;} loadMonth(); };
+$('todayBtn').onclick = () => { const t=new Date(); viewY=t.getFullYear(); viewM=t.getMonth(); selected=todayKey(); loadMonth(); };
+
+async function loadMonth(){
+  $('monthName').textContent = MONTHS[viewM];
+  $('yearName').textContent = viewY;
+  const start = new Date(viewY, viewM, 1), end = new Date(viewY, viewM+1, 1);
+  const lastDay = new Date(viewY, viewM+1, 0);
+  const [e, r] = await Promise.all([
+    sb.from('entries').select('*').gte('entry_date', keyOf(start)).lte('entry_date', keyOf(lastDay)),
+    sb.from('reminders').select('*').gte('remind_at', start.toISOString()).lt('remind_at', end.toISOString()).order('remind_at')
+  ]);
+  entries = {}; reminders = {};
+  (e.data||[]).forEach(x => entries[x.entry_date] = x);
+  (r.data||[]).forEach(x => { const k = keyOf(new Date(x.remind_at)); (reminders[k] ||= []).push(x); });
+  if (e.error || r.error) $('saveState').textContent = 'Could not load this month. Check your connection.';
+  if (!selected.startsWith(`${viewY}-${pad(viewM+1)}`)) selected = keyOf(start);
+  drawCal(); openDay(selected);
+}
+
+function drawCal(){
+  const cal = $('cal'); cal.innerHTML = '';
+  DOW.forEach(d => { const el=document.createElement('div'); el.className='dow'; el.textContent=d; cal.appendChild(el); });
+  const first = new Date(viewY, viewM, 1);
+  const offset = (first.getDay()+6)%7;
+  const startDate = new Date(viewY, viewM, 1-offset);
+  const cells = Math.ceil((offset + new Date(viewY, viewM+1, 0).getDate())/7)*7;
+  for (let i=0;i<cells;i++){
+    const d = new Date(startDate); d.setDate(startDate.getDate()+i);
+    const k = keyOf(d), inMonth = d.getMonth()===viewM;
+    const b = document.createElement('button');
+    b.className = 'day' + (inMonth?'':' out') + (k===todayKey()?' today':'') + (k===selected?' sel':'');
+    b.setAttribute('aria-label', d.toDateString());
+    b.innerHTML = `<span class="n">${d.getDate()}</span><span class="marks">${entries[k]?'<i class="mark entry"></i>':''}${reminders[k]?'<i class="mark rem"></i>':''}</span>`;
+    b.onclick = () => {
+      if (!inMonth){ viewY=d.getFullYear(); viewM=d.getMonth(); selected=k; loadMonth(); return; }
+      selected = k; drawCal(); openDay(k);
+    };
+    cal.appendChild(b);
+  }
+}
+
+/* ---------- entry ---------- */
+function openDay(k){
+  flushSave();
+  const d = new Date(k+'T00:00');
+  $('dayTitle').textContent = d.toLocaleDateString(undefined,{weekday:'long', day:'numeric', month:'long'});
+  const e = entries[k];
+  $('entryTitle').value = e?.title || '';
+  $('entryBody').value = e?.body || '';
+  currentMood = e?.mood || null;
+  drawMoods();
+  $('saveState').textContent = e ? 'Saved' : '';
+  drawReminders();
+}
+function drawMoods(){
+  const box = $('moods'); box.innerHTML='';
+  MOODS.forEach(m => {
+    const b=document.createElement('button'); b.className='mood'; b.textContent=m;
+    b.setAttribute('aria-pressed', String(currentMood===m));
+    b.onclick = () => { currentMood = currentMood===m ? null : m; drawMoods(); queueSave(); };
+    box.appendChild(b);
+  });
+}
+function queueSave(){ $('saveState').textContent='Saving…'; clearTimeout(saveTimer); saveTimer=setTimeout(saveEntry, 700); }
+function flushSave(){ if (saveTimer){ clearTimeout(saveTimer); saveTimer=null; saveEntry(); } }
+$('entryTitle').oninput = queueSave;
+$('entryBody').oninput = queueSave;
+
+async function saveEntry(){
+  saveTimer = null;
+  const k = selected, title = $('entryTitle').value.trim(), body = $('entryBody').value;
+  const row = { user_id:user.id, entry_date:k, title: title||null, body, mood: currentMood, updated_at:new Date().toISOString() };
+  if (!title && !body.trim() && !currentMood){
+    if (entries[k]) { await sb.from('entries').delete().eq('id', entries[k].id); delete entries[k]; drawCal(); }
+    $('saveState').textContent=''; return;
+  }
+  const { data, error } = await sb.from('entries').upsert(row, { onConflict:'user_id,entry_date' }).select().single();
+  if (error){ $('saveState').textContent='Not saved. Check your connection and keep typing to retry.'; return; }
+  const isNew = !entries[k]; entries[k] = data;
+  if (k===selected) $('saveState').textContent='Saved';
+  if (isNew) drawCal();
+}
+window.addEventListener('pagehide', flushSave);
+
+/* ---------- reminders ---------- */
+function drawReminders(){
+  const list = $('remList'), items = reminders[selected] || [];
+  list.innerHTML = '';
+  $('remEmpty').classList.toggle('hidden', items.length>0);
+  items.forEach(r => {
+    const t = new Date(r.remind_at);
+    const li = document.createElement('li'); li.className='rem-item' + (r.sent?' done':'');
+    li.innerHTML = `<span class="rem-time">${pad(t.getHours())}:${pad(t.getMinutes())}</span><span class="rem-text"></span><button class="rem-del" aria-label="Delete reminder">×</button>`;
+    const txt = li.querySelector('.rem-text'); txt.textContent = r.title;
+    if (r.note || r.sent){ const s=document.createElement('small'); s.textContent = [r.note, r.sent?'Sent':''].filter(Boolean).join(' – '); txt.appendChild(s); }
+    li.querySelector('.rem-del').onclick = async () => {
+      const { error } = await sb.from('reminders').delete().eq('id', r.id);
+      if (error) { $('remMsg').textContent='Could not delete. Try again.'; return; }
+      reminders[selected] = items.filter(x=>x.id!==r.id); if(!reminders[selected].length) delete reminders[selected];
+      drawReminders(); drawCal();
+    };
+    list.appendChild(li);
+  });
+}
+$('remAdd').onclick = async () => {
+  const time = $('remTime').value, title = $('remTitle').value.trim(), note = $('remNote').value.trim();
+  const m = $('remMsg'); m.className='msg';
+  if (!time || !title){ m.className='msg err'; m.textContent='Add a time and what to remind you about.'; return; }
+  const when = new Date(`${selected}T${time}`);
+  if (when < new Date()){ m.className='msg err'; m.textContent='That time has already passed. Pick a later time.'; return; }
+  $('remAdd').disabled = true;
+  const { data, error } = await sb.from('reminders').insert({ user_id:user.id, title, note:note||null, remind_at:when.toISOString() }).select().single();
+  $('remAdd').disabled = false;
+  if (error){ m.className='msg err'; m.textContent='Reminder not saved. Check your connection.'; return; }
+  (reminders[selected] ||= []).push(data);
+  reminders[selected].sort((a,b)=>a.remind_at.localeCompare(b.remind_at));
+  $('remTitle').value=''; $('remNote').value='';
+  m.textContent = `Reminder set for ${time}.`;
+  drawReminders(); drawCal();
+};
+
+/* ---------- push notifications ---------- */
+const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+let swReg = null;
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').then(r => { swReg = r; refreshNotify(); });
+
+function b64ToBytes(s){ const p='='.repeat((4-s.length%4)%4); const b=atob((s+p).replace(/-/g,'+').replace(/_/g,'/')); return Uint8Array.from(b,c=>c.charCodeAt(0)); }
+
+async function refreshNotify(){
+  const box=$('notify'), txt=$('notifyText'), btn=$('notifyBtn');
+  box.classList.remove('on'); btn.classList.remove('hidden');
+  if (isIOS && !standalone){ txt.textContent='To get reminders on iPhone, tap Share, then "Add to Home Screen", and open the diary from there.'; btn.classList.add('hidden'); return; }
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)){ txt.textContent='This browser can\'t show notifications. Try Chrome on Android, or the home screen app on iPhone.'; btn.classList.add('hidden'); return; }
+  if (Notification.permission==='denied'){ txt.textContent='Notifications are blocked. Allow them for this site in your browser settings.'; btn.classList.add('hidden'); return; }
+  const sub = swReg && await swReg.pushManager.getSubscription();
+  if (sub && Notification.permission==='granted'){ box.classList.add('on'); txt.textContent='Notifications are on for this phone.'; btn.classList.add('hidden'); saveSub(sub); return; }
+  txt.textContent='Turn on notifications to get your reminders on this phone.';
+}
+async function saveSub(sub){
+  if (!user) return;
+  const j = sub.toJSON();
+  await sb.from('push_subscriptions').upsert({ user_id:user.id, endpoint:j.endpoint, p256dh:j.keys.p256dh, auth:j.keys.auth }, { onConflict:'endpoint' });
+}
+$('notifyBtn').onclick = async () => {
+  try{
+    const perm = await Notification.requestPermission();
+    if (perm!=='granted'){ refreshNotify(); return; }
+    swReg = swReg || await navigator.serviceWorker.ready;
+    const sub = await swReg.pushManager.subscribe({ userVisibleOnly:true, applicationServerKey:b64ToBytes(VAPID_PUBLIC) });
+    await saveSub(sub);
+    refreshNotify();
+  }catch(err){ $('notifyText').textContent='Couldn\'t turn on notifications: '+err.message; }
+};
+</script>
+</body>
+</html>
