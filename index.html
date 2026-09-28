@@ -97,6 +97,20 @@ button{cursor:pointer}
 .rem-form{display:grid;grid-template-columns:110px 1fr;gap:8px}
 .rem-form .full{grid-column:1/-1}
 
+/* tabs + notes */
+.tabs{display:grid;grid-template-columns:1fr 1fr;gap:4px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:4px;margin:4px 0 10px}
+.tab{border:0;background:transparent;border-radius:9px;padding:10px;font-weight:600;color:var(--muted)}
+.tab[aria-selected="true"]{background:var(--ink);color:var(--bg)}
+.note-list{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-direction:column;gap:8px}
+.note-item{width:100%;text-align:left;border:1px solid var(--line);background:var(--surface);border-radius:14px;padding:14px 16px;display:block}
+.note-item b{display:block;font:500 19px/1.3 var(--serif);margin-bottom:2px}
+.note-item span{display:block;color:var(--muted);font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.note-item small{color:var(--muted);font-size:12px}
+.pin-tag{color:var(--lamp-ink);background:var(--lamp-soft);border-radius:6px;padding:1px 6px;font-size:11px;font-weight:700;margin-right:6px}
+.ed-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
+.ed-bar .right{display:flex;gap:14px;align-items:center}
+.link.danger{color:var(--danger)}
+.note-body{min-height:55vh}
 /* notifications bar */
 .notify{margin-top:18px;display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:14px;background:var(--lamp-soft);color:var(--lamp-ink)}
 .notify p{margin:0;flex:1;font-size:14px}
@@ -120,6 +134,11 @@ button{cursor:pointer}
 
   <!-- App -->
   <main id="app" class="hidden">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" id="tabDiary" aria-selected="true">Diary</button>
+      <button class="tab" role="tab" id="tabNotes" aria-selected="false">Notes</button>
+    </div>
+    <div id="diaryView">
     <div class="top">
       <h1 class="month"><span id="monthName"></span><span id="yearName" class="year"></span></h1>
       <div class="nav">
@@ -152,6 +171,31 @@ button{cursor:pointer}
         <div class="msg" id="remMsg" role="status"></div>
       </div>
     </section>
+    </div>
+
+    <div id="notesView" class="hidden">
+      <div id="noteListView">
+        <div class="top">
+          <h1 class="month">Notes</h1>
+          <button class="btn small" id="noteNew">+ New note</button>
+        </div>
+        <input id="noteSearch" class="input" type="search" placeholder="Search notes">
+        <ul id="noteList" class="note-list"></ul>
+        <p id="noteEmpty" class="empty hidden" style="margin-top:14px">No notes yet. Tap New note to start one.</p>
+      </div>
+      <section id="noteEditor" class="panel hidden">
+        <div class="ed-bar">
+          <button class="link" id="noteBack">‹ All notes</button>
+          <div class="right">
+            <button class="link" id="notePin">Pin</button>
+            <button class="link danger" id="noteDel">Delete</button>
+          </div>
+        </div>
+        <input id="noteTitle" class="title-in" placeholder="Title" maxlength="160">
+        <textarea id="noteBody" class="body-in note-body" placeholder="Start writing…"></textarea>
+        <div class="save-state" id="noteSave"></div>
+      </section>
+    </div>
 
     <div class="notify" id="notify">
       <p id="notifyText">Turn on notifications to get your reminders on this phone.</p>
@@ -211,7 +255,7 @@ sb.auth.onAuthStateChange((_e, session) => {
   user = u;
   $('auth').classList.toggle('hidden', !!user);
   $('app').classList.toggle('hidden', !user);
-  if (user) { $('who').textContent = user.email; const t = new Date(); viewY = t.getFullYear(); viewM = t.getMonth(); loadMonth(); refreshNotify(); }
+  if (user) { showTab('diary'); $('who').textContent = user.email; const t = new Date(); viewY = t.getFullYear(); viewM = t.getMonth(); loadMonth(); refreshNotify(); }
 });
 
 /* ---------- calendar ---------- */
@@ -337,6 +381,85 @@ $('remAdd').onclick = async () => {
   m.textContent = `Reminder set for ${time}.`;
   drawReminders(); drawCal();
 };
+
+
+/* ---------- notes ---------- */
+let notes = [], curNote = null, noteTimer = null;
+function showTab(t){
+  $('tabDiary').setAttribute('aria-selected', String(t==='diary'));
+  $('tabNotes').setAttribute('aria-selected', String(t==='notes'));
+  $('diaryView').classList.toggle('hidden', t!=='diary');
+  $('notesView').classList.toggle('hidden', t!=='notes');
+  if (t==='notes'){ flushSave(); closeNote(); loadNotes(); } else { flushNoteSave(); }
+}
+$('tabDiary').onclick = () => showTab('diary');
+$('tabNotes').onclick = () => showTab('notes');
+
+async function loadNotes(){
+  const { data, error } = await sb.from('notes').select('*').order('pinned',{ascending:false}).order('updated_at',{ascending:false});
+  if (error){ $('noteEmpty').textContent='Couldn\'t load notes. Check your connection.'; $('noteEmpty').classList.remove('hidden'); return; }
+  notes = data || []; drawNotes();
+}
+function drawNotes(){
+  const q = $('noteSearch').value.trim().toLowerCase();
+  const list = $('noteList'); list.innerHTML='';
+  const shown = notes.filter(n => !q || (n.title+' '+n.body).toLowerCase().includes(q));
+  $('noteEmpty').textContent = notes.length ? 'No notes match your search.' : 'No notes yet. Tap New note to start one.';
+  $('noteEmpty').classList.toggle('hidden', shown.length>0);
+  shown.forEach(n => {
+    const li=document.createElement('li'), b=document.createElement('button'); b.className='note-item';
+    const firstLine = n.body.split('\n').find(l=>l.trim()) || '';
+    const t=document.createElement('b'); t.textContent = n.title || firstLine || 'Untitled';
+    const p=document.createElement('span'); p.textContent = n.title ? firstLine : (n.body.split('\n').filter(l=>l.trim())[1] || '');
+    const d=document.createElement('small');
+    if (n.pinned){ const pt=document.createElement('span'); pt.className='pin-tag'; pt.style.display='inline'; pt.textContent='Pinned'; d.appendChild(pt); }
+    d.append(new Date(n.updated_at).toLocaleDateString(undefined,{day:'numeric',month:'short',year:'numeric'}));
+    b.append(t,p,d); b.onclick=()=>openNote(n); li.appendChild(b); list.appendChild(li);
+  });
+}
+$('noteSearch').oninput = drawNotes;
+$('noteNew').onclick = () => openNote({ id:null, title:'', body:'', pinned:false });
+
+function openNote(n){
+  curNote = { ...n };
+  $('noteTitle').value = n.title; $('noteBody').value = n.body;
+  $('notePin').textContent = n.pinned ? 'Unpin' : 'Pin';
+  $('noteDel').classList.toggle('hidden', !n.id);
+  $('noteSave').textContent = n.id ? 'Saved' : '';
+  $('noteListView').classList.add('hidden'); $('noteEditor').classList.remove('hidden');
+  if (!n.id) $('noteBody').focus();
+}
+function closeNote(){ curNote=null; $('noteEditor').classList.add('hidden'); $('noteListView').classList.remove('hidden'); }
+function queueNoteSave(){ $('noteSave').textContent='Saving…'; clearTimeout(noteTimer); noteTimer=setTimeout(saveNote,700); }
+function flushNoteSave(){ if (noteTimer){ clearTimeout(noteTimer); noteTimer=null; return saveNote(); } }
+$('noteTitle').oninput = queueNoteSave;
+$('noteBody').oninput = queueNoteSave;
+
+async function saveNote(){
+  noteTimer = null;
+  if (!curNote) return;
+  const n = curNote;
+  n.title = $('noteTitle').value.trim(); n.body = $('noteBody').value;
+  if (!n.id && !n.title && !n.body.trim()){ $('noteSave').textContent=''; return; }
+  const row = { title:n.title, body:n.body, pinned:n.pinned, updated_at:new Date().toISOString() };
+  const res = n.id
+    ? await sb.from('notes').update(row).eq('id', n.id).select().single()
+    : await sb.from('notes').insert({ ...row, user_id:user.id }).select().single();
+  if (res.error){ $('noteSave').textContent='Not saved. Keep typing to try again.'; return; }
+  n.id = res.data.id; n.updated_at = res.data.updated_at;
+  const i = notes.findIndex(x=>x.id===n.id); if (i>=0) notes[i]=res.data; else notes.unshift(res.data);
+  if (curNote===n){ $('noteSave').textContent='Saved'; $('noteDel').classList.remove('hidden'); }
+}
+$('noteBack').onclick = async () => { await flushNoteSave(); closeNote(); loadNotes(); };
+$('notePin').onclick = () => { if (!curNote) return; curNote.pinned = !curNote.pinned; $('notePin').textContent = curNote.pinned?'Unpin':'Pin'; queueNoteSave(); };
+$('noteDel').onclick = async () => {
+  if (!curNote?.id || !confirm('Delete this note?')) return;
+  clearTimeout(noteTimer); noteTimer=null;
+  const { error } = await sb.from('notes').delete().eq('id', curNote.id);
+  if (error){ $('noteSave').textContent='Couldn\'t delete. Try again.'; return; }
+  notes = notes.filter(x=>x.id!==curNote.id); closeNote(); drawNotes();
+};
+window.addEventListener('pagehide', flushNoteSave);
 
 /* ---------- push notifications ---------- */
 const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
