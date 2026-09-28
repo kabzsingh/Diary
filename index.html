@@ -159,14 +159,16 @@ button{cursor:pointer}
       <div class="save-state" id="saveState"></div>
 
       <div class="section">
-        <h3>Reminders</h3>
+        <h3>Reminders <span style="font-weight:400;color:var(--muted)">(optional)</span></h3>
         <ul class="rem-list" id="remList"></ul>
         <p class="empty hidden" id="remEmpty">No reminders on this day.</p>
-        <div class="rem-form">
+        <button id="remOpen" class="btn ghost" style="width:100%">+ Add a reminder</button>
+        <div class="rem-form hidden" id="remForm">
           <input id="remTime" class="input" type="time" value="08:00" aria-label="Time">
           <input id="remTitle" class="input" placeholder="Remind me to…" maxlength="120">
           <input id="remNote" class="input full" placeholder="Extra note (optional)" maxlength="240">
-          <button id="remAdd" class="btn full">Add reminder</button>
+          <button id="remAdd" class="btn full">Save reminder</button>
+          <button id="remCancel" class="link full" style="justify-self:center">Cancel</button>
         </div>
         <div class="msg" id="remMsg" role="status"></div>
       </div>
@@ -314,6 +316,8 @@ function openDay(k){
   drawMoods();
   $('saveState').textContent = e ? 'Saved' : '';
   drawReminders();
+  closeRemForm();
+  $('remMsg').textContent = '';
 }
 function drawMoods(){
   const box = $('moods'); box.innerHTML='';
@@ -360,11 +364,25 @@ function drawReminders(){
       const { error } = await sb.from('reminders').delete().eq('id', r.id);
       if (error) { $('remMsg').textContent='Could not delete. Try again.'; return; }
       reminders[selected] = items.filter(x=>x.id!==r.id); if(!reminders[selected].length) delete reminders[selected];
-      drawReminders(); drawCal();
+      drawReminders(); drawCal(); if ($('remForm').classList.contains('hidden')) closeRemForm();
     };
     list.appendChild(li);
   });
 }
+function openRemForm(){
+  $('remForm').classList.remove('hidden'); $('remOpen').classList.add('hidden'); $('remMsg').textContent='';
+  // default to the next full hour today, 08:00 on other days
+  const now = new Date();
+  $('remTime').value = selected===todayKey() ? `${pad(Math.min(now.getHours()+1,23))}:00` : '08:00';
+  $('remTitle').focus();
+}
+function closeRemForm(){
+  $('remForm').classList.add('hidden'); $('remOpen').classList.remove('hidden');
+  $('remOpen').textContent = (reminders[selected]||[]).length ? '+ Add another reminder' : '+ Add a reminder';
+  $('remTitle').value=''; $('remNote').value='';
+}
+$('remOpen').onclick = openRemForm;
+$('remCancel').onclick = () => { closeRemForm(); $('remMsg').textContent=''; };
 $('remAdd').onclick = async () => {
   const time = $('remTime').value, title = $('remTitle').value.trim(), note = $('remNote').value.trim();
   const m = $('remMsg'); m.className='msg';
@@ -377,9 +395,8 @@ $('remAdd').onclick = async () => {
   if (error){ m.className='msg err'; m.textContent='Reminder not saved. Check your connection.'; return; }
   (reminders[selected] ||= []).push(data);
   reminders[selected].sort((a,b)=>a.remind_at.localeCompare(b.remind_at));
-  $('remTitle').value=''; $('remNote').value='';
-  m.textContent = `Reminder set for ${time}.`;
-  drawReminders(); drawCal();
+  drawReminders(); drawCal(); closeRemForm();
+  m.textContent = `Reminder set for ${time}. You can add as many as you like.`;
 };
 
 
