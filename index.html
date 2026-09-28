@@ -167,6 +167,7 @@ button{cursor:pointer}
 const SB_URL = 'https://gkuminmjbtticxlppbgh.supabase.co';
 const SB_KEY = 'sb_publishable_Ybh0DgGL5SdZ11l821YRqQ_aKFCm7E3';
 const VAPID_PUBLIC = 'BNH2fbaJbx7IJukYgf0aklzEz8_JZwQiyS5LzLZ1lMW2Fc3eXJ0OajMJGCja9j1hG4FhS6lTAioI3WJ-CSDoo74';
+if (typeof supabase === 'undefined') { document.body.innerHTML = '<p style="padding:40px 20px;font-family:sans-serif">Couldn\'t load the diary. Check your internet connection and refresh.</p>'; throw new Error('supabase-js not loaded'); }
 const sb = supabase.createClient(SB_URL, SB_KEY);
 
 const $ = id => document.getElementById(id);
@@ -177,7 +178,7 @@ const pad = n => String(n).padStart(2,'0');
 const keyOf = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
 const todayKey = () => keyOf(new Date());
 
-let user = null, signUp = false;
+let user = null, signUp = false, authReady = false;
 let viewY, viewM, selected = todayKey();
 let entries = {}, reminders = {};
 let saveTimer = null, currentMood = null;
@@ -205,7 +206,8 @@ $('signOut').onclick = () => sb.auth.signOut();
 
 sb.auth.onAuthStateChange((_e, session) => {
   const u = session?.user || null;
-  if (u?.id === user?.id) return;
+  if (authReady && (u?.id || null) === (user?.id || null)) return;
+  authReady = true;
   user = u;
   $('auth').classList.toggle('hidden', !!user);
   $('app').classList.toggle('hidden', !user);
