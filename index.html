@@ -146,6 +146,20 @@ button{cursor:pointer}
 .site-block .issue-list{margin:0 0 4px}
 .add-point{border:0;background:none;color:var(--muted);font-weight:600;font-size:14px;padding:6px 4px}
 .site-del{border:0;background:none;color:var(--muted);font-size:20px;line-height:1;padding:0 4px}
+/* pdf sheet (rendered off-screen, always light) */
+.pdf-wrap{position:absolute;left:-10000px;top:0;width:720px}
+.pdf-sheet{width:720px;background:#fff;color:#1C2238;padding:36px 40px;font:14px/1.5 "Manrope",Arial,sans-serif}
+.pdf-sheet h1{font:600 28px/1.2 "Newsreader",Georgia,serif;margin:0 0 4px}
+.pdf-sheet .meta{color:#646B82;font-size:12px;margin-bottom:18px;border-bottom:2px solid #E3A23B;padding-bottom:10px}
+.pdf-site{margin:0 0 14px;page-break-inside:avoid;break-inside:avoid}
+.pdf-site h2{font:600 18px "Newsreader",Georgia,serif;margin:0 0 6px}
+.pdf-site h2 small{font:500 12px "Manrope",Arial,sans-serif;color:#646B82;margin-left:8px}
+.pdf-site ul{list-style:none;margin:0;padding:0 0 0 6px}
+.pdf-site li{display:flex;gap:8px;padding:3px 0;border-bottom:1px solid #EEF0F5}
+.pdf-site li .bx{flex:none;width:16px}
+.pdf-site li.done .tx{text-decoration:line-through;color:#8a90a3}
+.pdf-other h2{font:600 16px "Manrope",Arial,sans-serif;margin:18px 0 6px}
+.pdf-sheet [style*="background-color"]{color:#1C2238;padding:0 2px;border-radius:2px}
 /* notifications bar */
 .notify{margin-top:18px;display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:14px;background:var(--lamp-soft);color:var(--lamp-ink)}
 .notify p{margin:0;flex:1;font-size:14px}
@@ -224,6 +238,7 @@ button{cursor:pointer}
         <div class="ed-bar">
           <button class="link" id="noteBack">‹ All notes</button>
           <div class="right">
+            <button class="link" id="notePdf">PDF</button>
             <button class="link" id="notePin">Pin</button>
             <button class="link danger" id="noteDel">Delete</button>
           </div>
@@ -647,6 +662,63 @@ $('noteDel').onclick = async () => {
   notes = notes.filter(x=>x.id!==curNote.id); closeNote(); drawNotes();
 };
 window.addEventListener('pagehide', flushNoteSave);
+
+
+/* ---------- PDF download ---------- */
+function loadScript(src){ return new Promise((ok,fail)=>{ const t=document.createElement('script'); t.src=src; t.onload=ok; t.onerror=()=>fail(new Error('load')); document.head.appendChild(t); }); }
+$('notePdf').onclick = async () => {
+  if (!curNote) return;
+  const btn = $('notePdf'); btn.disabled = true; btn.textContent = 'Making PDF…';
+  try{
+    await flushNoteSave();
+    if (!window.html2pdf) await loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js');
+    const n = curNote, title = $('noteTitle').value.trim() || 'Notes';
+    const sheet = document.createElement('div'); sheet.className = 'pdf-sheet';
+    const h = document.createElement('h1'); h.textContent = title; sheet.appendChild(h);
+    const groups = n.groups.filter(g => g.site || g.points.some(p => toText(p.html).trim()));
+    const pts = groups.flatMap(g => g.points).filter(p => toText(p.html).trim());
+    const open = pts.filter(p => !p.done).length;
+    const meta = document.createElement('div'); meta.className = 'meta';
+    meta.textContent = new Date().toLocaleDateString(undefined,{weekday:'long',day:'numeric',month:'long',year:'numeric'})
+      + (groups.length ? `  ·  ${groups.length} site${groups.length>1?'s':''}  ·  ${open} open, ${pts.length-open} done` : '');
+    sheet.appendChild(meta);
+    groups.forEach((g, gi) => {
+      const sec = document.createElement('section'); sec.className = 'pdf-site';
+      const h2 = document.createElement('h2'); h2.textContent = `${gi+1}. ${g.site || 'Unnamed site'}`;
+      const gp = g.points.filter(p => toText(p.html).trim()), go = gp.filter(p => !p.done).length;
+      const sm = document.createElement('small'); sm.textContent = gp.length ? (go ? `${go} open` : 'all done') : ''; h2.appendChild(sm);
+      const ul = document.createElement('ul');
+      gp.forEach(p => {
+        const li = document.createElement('li'); if (p.done) li.className = 'done';
+        const bx = document.createElement('span'); bx.className = 'bx'; bx.textContent = p.done ? '☑' : '☐';
+        const tx = document.createElement('span'); tx.className = 'tx'; tx.innerHTML = clean(p.html);
+        li.append(bx, tx); ul.appendChild(li);
+      });
+      sec.append(h2, ul); sheet.appendChild(sec);
+    });
+    const other = clean($('noteBody').innerHTML);
+    if (toText(other).trim()){
+      const o = document.createElement('div'); o.className = 'pdf-other';
+      const h2 = document.createElement('h2'); h2.textContent = 'Other notes';
+      const body = document.createElement('div'); body.innerHTML = other;
+      o.append(h2, body); sheet.appendChild(o);
+    }
+    const wrap = document.createElement('div'); wrap.className = 'pdf-wrap'; wrap.appendChild(sheet); document.body.appendChild(wrap);
+    const fname = (title.replace(/[^\w\- ]+/g,'').trim().replace(/\s+/g,'-') || 'notes') + '-' + todayKey() + '.pdf';
+    await html2pdf().set({
+      margin: [10,8,12,8], filename: fname,
+      image: { type:'jpeg', quality:0.95 },
+      html2canvas: { scale:2, backgroundColor:'#ffffff', scrollX:0, scrollY:0 },
+      jsPDF: { unit:'mm', format:'a4', orientation:'portrait' },
+      pagebreak: { mode:['css','avoid-all'] }
+    }).from(sheet).save();
+    wrap.remove();
+    $('noteSave').textContent = 'PDF downloaded. Check your Downloads.';
+  }catch(e){
+    document.querySelectorAll('.pdf-wrap').forEach(x=>x.remove());
+    $('noteSave').textContent = 'Couldn\'t make the PDF. Check your internet and try again.';
+  }finally{ btn.disabled = false; btn.textContent = 'PDF'; }
+};
 
 /* ---------- push notifications ---------- */
 const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
