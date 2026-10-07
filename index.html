@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#1C2238">
+<meta name="color-scheme" content="light dark">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>My Diary</title>
@@ -135,6 +136,16 @@ button{cursor:pointer}
 .note-body{min-height:30vh;font:400 18px/1.6 var(--serif);padding:4px 0}
 .site-tag{display:inline-block;font-size:12px;font-weight:700;color:var(--lamp-ink);background:var(--lamp-soft);border-radius:6px;padding:2px 8px;margin-bottom:6px}
 .open-tag{font-size:12px;font-weight:600;color:var(--danger);margin-left:8px}
+.site-blocks{list-style:none;margin:0 0 12px;padding:0;display:flex;flex-direction:column;gap:12px}
+.site-block{border:1px solid var(--line);border-radius:14px;padding:12px 12px 8px;background:var(--surface)}
+.site-head{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.site-num{font:600 20px var(--serif);min-width:26px;color:var(--lamp-ink)}
+.site-name{flex:1;min-width:0;border:0;border-bottom:1px dashed var(--line);background:transparent;font:600 18px var(--serif);padding:4px 2px}
+.site-name:focus{outline:none;border-bottom-color:var(--lamp)}
+.site-meta{font-size:12px;color:var(--muted);white-space:nowrap}
+.site-block .issue-list{margin:0 0 4px}
+.add-point{border:0;background:none;color:var(--muted);font-weight:600;font-size:14px;padding:6px 4px}
+.site-del{border:0;background:none;color:var(--muted);font-size:20px;line-height:1;padding:0 4px}
 /* notifications bar */
 .notify{margin-top:18px;display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:14px;background:var(--lamp-soft);color:var(--lamp-ink)}
 .notify p{margin:0;flex:1;font-size:14px}
@@ -217,10 +228,8 @@ button{cursor:pointer}
             <button class="link danger" id="noteDel">Delete</button>
           </div>
         </div>
-        <label class="mini-label" for="noteSite">Site name</label>
-        <input id="noteSite" class="input" list="siteList" placeholder="e.g. Europcar Jetpark" maxlength="120">
+        <input id="noteTitle" class="title-in" placeholder="List name, e.g. SLA issues" maxlength="160">
         <datalist id="siteList"></datalist>
-        <input id="noteTitle" class="title-in" placeholder="Title (optional)" maxlength="160" style="margin-top:8px">
 
         <div class="toolbar" id="toolbar" aria-label="Formatting">
           <button data-cmd="bold" aria-label="Bold"><b>B</b></button>
@@ -240,12 +249,12 @@ button{cursor:pointer}
           <button data-cmd="removeFormat" aria-label="Clear formatting" class="tb-clear">Clear</button>
         </div>
 
-        <div class="issues-head"><h3>Issues</h3><span id="issueCount" class="issue-count"></span></div>
-        <ul id="issueList" class="issue-list"></ul>
-        <button id="issueAdd" class="btn ghost small" style="width:100%">+ Add issue</button>
+        <div class="issues-head"><h3>Sites</h3><span id="issueCount" class="issue-count"></span></div>
+        <ol id="siteBlocks" class="site-blocks"></ol>
+        <button id="siteAdd" class="btn small" style="width:100%">+ Add site</button>
 
-        <h3 class="notes-h">Notes</h3>
-        <div id="noteBody" class="rich note-body" contenteditable="true" data-placeholder="Extra notes, measurements, parts needed…"></div>
+        <h3 class="notes-h">Other notes</h3>
+        <div id="noteBody" class="rich note-body" contenteditable="true" data-placeholder="Anything that isn't for a specific site…"></div>
         <div class="save-state" id="noteSave"></div>
       </section>
     </div>
@@ -490,22 +499,28 @@ async function loadNotes(){
   notes = data || []; drawNotes(); drawSiteList();
 }
 function drawSiteList(){
-  const sites = [...new Set(notes.map(n => (n.site||'').trim()).filter(Boolean))].sort();
+  const sites = [...new Set(notes.flatMap(n => groupsOf(n).map(g => (g.site||'').trim())).filter(Boolean))].sort();
   $('siteList').innerHTML = ''; sites.forEach(x => { const o=document.createElement('option'); o.value=x; $('siteList').appendChild(o); });
+}
+function groupsOf(n){
+  const raw = n.issues || [];
+  if (raw.length && raw[0] && Array.isArray(raw[0].points)) return raw;
+  return raw.length ? [{ site: n.site || '', points: raw }] : [];
 }
 function drawNotes(){
   const q = $('noteSearch').value.trim().toLowerCase();
   const list = $('noteList'); list.innerHTML='';
-  const shown = notes.filter(n => !q || [n.site, n.title, toText(n.body), ...(n.issues||[]).map(i=>toText(i.html))].join(' ').toLowerCase().includes(q));
+  const hay = n => [n.title, n.site, toText(n.body), ...groupsOf(n).flatMap(g => [g.site, ...g.points.map(p=>toText(p.html))])].join(' ').toLowerCase();
+  const shown = notes.filter(n => !q || hay(n).includes(q));
   $('noteEmpty').textContent = notes.length ? 'No notes match your search.' : 'No notes yet. Tap New note to start one.';
   $('noteEmpty').classList.toggle('hidden', shown.length>0);
   shown.forEach(n => {
     const li=document.createElement('li'), b=document.createElement('button'); b.className='note-item';
-    if (n.site){ const st=document.createElement('span'); st.className='site-tag'; st.style.display='inline-block'; st.textContent=n.site; b.appendChild(st); }
-    const issues = n.issues || [], open = issues.filter(i=>!i.done).length;
+    const groups = groupsOf(n), pts = groups.flatMap(g=>g.points), open = pts.filter(p=>!p.done).length;
     const bodyText = toText(n.body).trim();
-    const t=document.createElement('b'); t.textContent = n.title || (issues[0] ? toText(issues[0].html) : '') || bodyText.split('\n')[0] || 'Untitled';
-    const p=document.createElement('span'); p.textContent = issues.length ? `${issues.length} issue${issues.length>1?'s':''}` + (bodyText ? ' · ' + bodyText : '') : bodyText;
+    const t=document.createElement('b'); t.textContent = n.title || groups[0]?.site || bodyText.split('\n')[0] || 'Untitled';
+    const p=document.createElement('span');
+    p.textContent = groups.length ? `${groups.length} site${groups.length>1?'s':''}: ` + groups.map(g=>g.site||'Unnamed').join(', ') : bodyText;
     const d=document.createElement('small');
     if (n.pinned){ const pt=document.createElement('span'); pt.className='pin-tag'; pt.style.display='inline'; pt.textContent='Pinned'; d.appendChild(pt); }
     d.append(new Date(n.updated_at).toLocaleDateString(undefined,{day:'numeric',month:'short',year:'numeric'}));
@@ -514,49 +529,73 @@ function drawNotes(){
   });
 }
 $('noteSearch').oninput = drawNotes;
-$('noteNew').onclick = () => openNote({ id:null, site:'', title:'', body:'', issues:[], pinned:false });
+$('noteNew').onclick = () => openNote({ id:null, site:'', title:'', body:'', issues:[{ site:'', points:[{html:'',done:false}] }], pinned:false });
 
 function openNote(n){
-  curNote = { ...n, issues: (n.issues||[]).map(i => ({...i})) };
-  $('noteSite').value = n.site || '';
+  curNote = { ...n, groups: groupsOf(n).map(g => ({ site:g.site||'', points:(g.points||[]).map(p=>({...p})) })) };
   $('noteTitle').value = n.title || '';
   $('noteBody').innerHTML = bodyHtml(n.body);
-  drawIssues();
+  drawSites();
   $('notePin').textContent = n.pinned ? 'Unpin' : 'Pin';
   $('noteDel').classList.toggle('hidden', !n.id);
   $('noteSave').textContent = n.id ? 'Saved' : '';
   $('noteListView').classList.add('hidden'); $('noteEditor').classList.remove('hidden');
   window.scrollTo(0,0);
-  if (!n.id) $('noteSite').focus();
+  if (!n.id) $('noteTitle').focus();
 }
 function closeNote(){ curNote=null; $('noteEditor').classList.add('hidden'); $('noteListView').classList.remove('hidden'); }
 
-/* issues */
-function drawIssues(focusIndex){
-  const ul = $('issueList'); ul.innerHTML='';
-  curNote.issues.forEach((it, i) => {
-    const li=document.createElement('li'); li.className='issue'+(it.done?' done':'');
-    const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=!!it.done; cb.setAttribute('aria-label','Mark issue fixed');
-    cb.onchange=()=>{ it.done=cb.checked; li.classList.toggle('done', it.done); countIssues(); queueNoteSave(); };
-    const ed=document.createElement('div'); ed.className='rich'; ed.contentEditable='true'; ed.dataset.placeholder='Describe the issue…';
-    ed.innerHTML = clean(it.html||'');
-    ed.oninput=()=>{ it.html = ed.innerHTML; queueNoteSave(); };
-    ed.onkeydown=e=>{
-      if (e.key==='Enter' && !e.shiftKey){ e.preventDefault(); curNote.issues.splice(i+1,0,{html:'',done:false}); drawIssues(i+1); }
-      if (e.key==='Backspace' && !ed.textContent && curNote.issues.length>1){ e.preventDefault(); curNote.issues.splice(i,1); drawIssues(Math.max(0,i-1)); queueNoteSave(); }
-    };
-    const x=document.createElement('button'); x.className='x'; x.textContent='×'; x.setAttribute('aria-label','Remove issue');
-    x.onclick=()=>{ curNote.issues.splice(i,1); drawIssues(); queueNoteSave(); };
-    li.append(cb, ed, x); ul.appendChild(li);
-    if (i===focusIndex) setTimeout(()=>ed.focus(),0);
+/* sites with points */
+function drawSites(focus){
+  const ol=$('siteBlocks'); ol.innerHTML='';
+  curNote.groups.forEach((g, gi) => {
+    const li=document.createElement('li'); li.className='site-block';
+    const head=document.createElement('div'); head.className='site-head';
+    const num=document.createElement('span'); num.className='site-num'; num.textContent=(gi+1)+'.';
+    const name=document.createElement('input'); name.className='site-name'; name.value=g.site; name.placeholder='Site name'; name.setAttribute('list','siteList'); name.maxLength=120;
+    name.oninput=()=>{ g.site=name.value; queueNoteSave(); };
+    name.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); if(!g.points.length) g.points.push({html:'',done:false}); drawSites({gi, pi:0}); } };
+    const meta=document.createElement('span'); meta.className='site-meta';
+    const del=document.createElement('button'); del.className='site-del'; del.textContent='×'; del.setAttribute('aria-label','Remove site');
+    del.onclick=()=>{ const has=g.points.some(p=>toText(p.html).trim()); if(has && !confirm(`Remove ${g.site||'this site'} and its points?`)) return; curNote.groups.splice(gi,1); drawSites(); queueNoteSave(); };
+    head.append(num,name,meta,del);
+
+    const ul=document.createElement('ul'); ul.className='issue-list';
+    g.points.forEach((it, pi) => {
+      const row=document.createElement('li'); row.className='issue'+(it.done?' done':'');
+      const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=!!it.done; cb.setAttribute('aria-label','Mark done');
+      cb.onchange=()=>{ it.done=cb.checked; row.classList.toggle('done', it.done); countAll(); queueNoteSave(); };
+      const ed=document.createElement('div'); ed.className='rich'; ed.contentEditable='true'; ed.dataset.placeholder='Point / issue…';
+      ed.innerHTML=clean(it.html||'');
+      ed.oninput=()=>{ it.html=ed.innerHTML; queueNoteSave(); };
+      ed.onkeydown=e=>{
+        if (e.key==='Enter' && !e.shiftKey){ e.preventDefault(); g.points.splice(pi+1,0,{html:'',done:false}); drawSites({gi, pi:pi+1}); }
+        if (e.key==='Backspace' && !ed.textContent && g.points.length>1){ e.preventDefault(); g.points.splice(pi,1); drawSites({gi, pi:Math.max(0,pi-1)}); queueNoteSave(); }
+      };
+      const x=document.createElement('button'); x.className='x'; x.textContent='×'; x.setAttribute('aria-label','Remove point');
+      x.onclick=()=>{ g.points.splice(pi,1); drawSites(); queueNoteSave(); };
+      row.append(cb,ed,x); ul.appendChild(row);
+      if (focus && focus.gi===gi && focus.pi===pi) setTimeout(()=>ed.focus(),0);
+    });
+    const add=document.createElement('button'); add.className='add-point'; add.textContent='+ Add point';
+    add.onclick=()=>{ g.points.push({html:'',done:false}); drawSites({gi, pi:g.points.length-1}); };
+    li.append(head,ul,add); ol.appendChild(li);
+    const open=g.points.filter(p=>!p.done && toText(p.html).trim()).length; meta.textContent = open ? `${open} open` : (g.points.length ? 'all done' : '');
+    if (focus && focus.gi===gi && focus.site) setTimeout(()=>name.focus(),0);
   });
-  countIssues();
+  countAll();
 }
-function countIssues(){
-  const all=curNote.issues.length, open=curNote.issues.filter(i=>!i.done).length;
-  $('issueCount').textContent = all ? `${open} open · ${all-open} fixed` : '';
+function countAll(){
+  const pts=curNote.groups.flatMap(g=>g.points).filter(p=>toText(p.html).trim());
+  const open=pts.filter(p=>!p.done).length;
+  $('issueCount').textContent = pts.length ? `${open} open · ${pts.length-open} done` : '';
+  document.querySelectorAll('#siteBlocks .site-block').forEach((el,gi)=>{
+    const g=curNote.groups[gi]; if(!g) return;
+    const o=g.points.filter(p=>!p.done && toText(p.html).trim()).length;
+    el.querySelector('.site-meta').textContent = o ? `${o} open` : (g.points.some(p=>toText(p.html).trim()) ? 'all done' : '');
+  });
 }
-$('issueAdd').onclick = () => { curNote.issues.push({ html:'', done:false }); drawIssues(curNote.issues.length-1); };
+$('siteAdd').onclick = () => { curNote.groups.push({ site:'', points:[{html:'',done:false}] }); drawSites({gi:curNote.groups.length-1, site:true}); };
 
 /* formatting toolbar: works on whatever text you've selected in issues or notes */
 document.execCommand && (()=>{ try{ document.execCommand('styleWithCSS', false, true); }catch(e){} })();
@@ -576,7 +615,6 @@ $('toolbar').addEventListener('click', e => {
 
 function queueNoteSave(){ $('noteSave').textContent='Saving…'; clearTimeout(noteTimer); noteTimer=setTimeout(saveNote,700); }
 function flushNoteSave(){ if (noteTimer){ clearTimeout(noteTimer); noteTimer=null; return saveNote(); } }
-$('noteSite').oninput = queueNoteSave;
 $('noteTitle').oninput = queueNoteSave;
 $('noteBody').oninput = queueNoteSave;
 
@@ -584,11 +622,13 @@ async function saveNote(){
   noteTimer = null;
   if (!curNote) return;
   const n = curNote;
-  n.site = $('noteSite').value.trim(); n.title = $('noteTitle').value.trim();
+  n.title = $('noteTitle').value.trim();
   n.body = clean($('noteBody').innerHTML);
-  const issues = n.issues.map(i => ({ html: clean(i.html), done: !!i.done })).filter(i => toText(i.html).trim());
-  if (!n.id && !n.site && !n.title && !toText(n.body).trim() && !issues.length){ $('noteSave').textContent=''; return; }
-  const row = { site:n.site, title:n.title, body:n.body, issues, pinned:n.pinned, updated_at:new Date().toISOString() };
+  const issues = n.groups
+    .map(g => ({ site:(g.site||'').trim(), points:g.points.map(p => ({ html:clean(p.html), done:!!p.done })).filter(p => toText(p.html).trim()) }))
+    .filter(g => g.site || g.points.length);
+  if (!n.id && !n.title && !toText(n.body).trim() && !issues.length){ $('noteSave').textContent=''; return; }
+  const row = { site:'', title:n.title, body:n.body, issues, pinned:n.pinned, updated_at:new Date().toISOString() };
   const res = n.id
     ? await sb.from('notes').update(row).eq('id', n.id).select().single()
     : await sb.from('notes').insert({ ...row, user_id:user.id }).select().single();
