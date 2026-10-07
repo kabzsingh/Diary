@@ -111,6 +111,30 @@ button{cursor:pointer}
 .ed-bar .right{display:flex;gap:14px;align-items:center}
 .link.danger{color:var(--danger)}
 .note-body{min-height:55vh}
+.mini-label{display:block;font-size:13px;font-weight:600;color:var(--muted);margin:4px 0 6px}
+.toolbar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;display:flex;flex-wrap:wrap;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:8px;margin:14px 0}
+.toolbar button{border:1px solid var(--line);background:var(--bg);border-radius:8px;min-width:34px;height:34px;padding:0 8px}
+.toolbar .sw{width:28px;min-width:28px;height:28px;padding:0;border-radius:50%;background:var(--c);border:2px solid var(--line)}
+.toolbar .sw.hl{border-radius:6px}
+.tb-sep{width:1px;height:22px;background:var(--line);margin:0 2px}
+.tb-label{font-size:12px;color:var(--muted);font-weight:600}
+.tb-clear{font-size:13px}
+.issues-head{display:flex;align-items:baseline;justify-content:space-between;margin-top:6px}
+.issues-head h3,.notes-h{font:600 16px var(--sans);margin:0 0 8px}
+.notes-h{margin-top:20px}
+.issue-count{font-size:13px;color:var(--muted)}
+.issue-list{list-style:none;margin:0 0 10px;padding:0;display:flex;flex-direction:column;gap:6px}
+.issue{display:flex;align-items:flex-start;gap:10px;padding:8px 10px;border-radius:10px;background:var(--bg)}
+.issue input[type=checkbox]{width:22px;height:22px;margin:2px 0 0;accent-color:var(--lamp);flex:none}
+.issue .rich{flex:1;min-width:0;outline:none;font-size:16px;line-height:1.45;word-break:break-word}
+.issue.done .rich{text-decoration:line-through;color:var(--muted)}
+.issue .x{border:0;background:none;color:var(--muted);font-size:20px;line-height:1;padding:0 4px}
+.rich{outline:none}
+.rich:empty::before{content:attr(data-placeholder);color:var(--muted)}
+.rich [style*="background-color"]{color:#1C2238;border-radius:3px;padding:0 2px}
+.note-body{min-height:30vh;font:400 18px/1.6 var(--serif);padding:4px 0}
+.site-tag{display:inline-block;font-size:12px;font-weight:700;color:var(--lamp-ink);background:var(--lamp-soft);border-radius:6px;padding:2px 8px;margin-bottom:6px}
+.open-tag{font-size:12px;font-weight:600;color:var(--danger);margin-left:8px}
 /* notifications bar */
 .notify{margin-top:18px;display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:14px;background:var(--lamp-soft);color:var(--lamp-ink)}
 .notify p{margin:0;flex:1;font-size:14px}
@@ -181,7 +205,7 @@ button{cursor:pointer}
           <h1 class="month">Notes</h1>
           <button class="btn small" id="noteNew">+ New note</button>
         </div>
-        <input id="noteSearch" class="input" type="search" placeholder="Search notes">
+        <input id="noteSearch" class="input" type="search" placeholder="Search sites, notes and issues">
         <ul id="noteList" class="note-list"></ul>
         <p id="noteEmpty" class="empty hidden" style="margin-top:14px">No notes yet. Tap New note to start one.</p>
       </div>
@@ -193,8 +217,35 @@ button{cursor:pointer}
             <button class="link danger" id="noteDel">Delete</button>
           </div>
         </div>
-        <input id="noteTitle" class="title-in" placeholder="Title" maxlength="160">
-        <textarea id="noteBody" class="body-in note-body" placeholder="Start writing…"></textarea>
+        <label class="mini-label" for="noteSite">Site name</label>
+        <input id="noteSite" class="input" list="siteList" placeholder="e.g. Europcar Jetpark" maxlength="120">
+        <datalist id="siteList"></datalist>
+        <input id="noteTitle" class="title-in" placeholder="Title (optional)" maxlength="160" style="margin-top:8px">
+
+        <div class="toolbar" id="toolbar" aria-label="Formatting">
+          <button data-cmd="bold" aria-label="Bold"><b>B</b></button>
+          <button data-cmd="underline" aria-label="Underline"><u>U</u></button>
+          <span class="tb-sep"></span>
+          <span class="tb-label">Text</span>
+          <button data-color="inherit" aria-label="Normal text colour" class="sw" style="--c:var(--ink)"></button>
+          <button data-color="#D93025" aria-label="Red text" class="sw" style="--c:#D93025"></button>
+          <button data-color="#E8710A" aria-label="Orange text" class="sw" style="--c:#E8710A"></button>
+          <button data-color="#188038" aria-label="Green text" class="sw" style="--c:#188038"></button>
+          <button data-color="#1A73E8" aria-label="Blue text" class="sw" style="--c:#1A73E8"></button>
+          <span class="tb-sep"></span>
+          <span class="tb-label">Mark</span>
+          <button data-hl="#FFF176" aria-label="Yellow highlight" class="sw hl" style="--c:#FFF176"></button>
+          <button data-hl="#A5F3B5" aria-label="Green highlight" class="sw hl" style="--c:#A5F3B5"></button>
+          <button data-hl="#FFB3C7" aria-label="Pink highlight" class="sw hl" style="--c:#FFB3C7"></button>
+          <button data-cmd="removeFormat" aria-label="Clear formatting" class="tb-clear">Clear</button>
+        </div>
+
+        <div class="issues-head"><h3>Issues</h3><span id="issueCount" class="issue-count"></span></div>
+        <ul id="issueList" class="issue-list"></ul>
+        <button id="issueAdd" class="btn ghost small" style="width:100%">+ Add issue</button>
+
+        <h3 class="notes-h">Notes</h3>
+        <div id="noteBody" class="rich note-body" contenteditable="true" data-placeholder="Extra notes, measurements, parts needed…"></div>
         <div class="save-state" id="noteSave"></div>
       </section>
     </div>
@@ -412,43 +463,120 @@ function showTab(t){
 $('tabDiary').onclick = () => showTab('diary');
 $('tabNotes').onclick = () => showTab('notes');
 
+/* keep only safe formatting: bold, underline, italics, line breaks, colours, highlights */
+const OK_TAGS = new Set(['B','STRONG','U','I','EM','BR','DIV','P','SPAN','FONT','UL','OL','LI']);
+function clean(html){
+  const doc = new DOMParser().parseFromString('<div>'+(html||'')+'</div>','text/html');
+  const walk = el => {
+    [...el.childNodes].forEach(n => {
+      if (n.nodeType === 3) return;
+      if (n.nodeType !== 1 || !OK_TAGS.has(n.tagName)) { n.replaceWith(document.createTextNode(n.textContent)); return; }
+      const color = n.style?.color || (n.tagName==='FONT' ? n.getAttribute('color') : '');
+      const bg = n.style?.backgroundColor || '';
+      [...n.attributes].forEach(at => n.removeAttribute(at.name));
+      if (color) n.style.color = color;
+      if (bg) n.style.backgroundColor = bg;
+      walk(n);
+    });
+  };
+  const root = doc.body.firstChild; walk(root); return root.innerHTML;
+}
+const toText = html => { const d=document.createElement('div'); d.innerHTML = html||''; return d.textContent || ''; };
+const bodyHtml = b => !b ? '' : (/<[a-z][\s\S]*>/i.test(b) ? clean(b) : b.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/\n/g,'<br>'));
+
 async function loadNotes(){
   const { data, error } = await sb.from('notes').select('*').order('pinned',{ascending:false}).order('updated_at',{ascending:false});
   if (error){ $('noteEmpty').textContent='Couldn\'t load notes. Check your connection.'; $('noteEmpty').classList.remove('hidden'); return; }
-  notes = data || []; drawNotes();
+  notes = data || []; drawNotes(); drawSiteList();
+}
+function drawSiteList(){
+  const sites = [...new Set(notes.map(n => (n.site||'').trim()).filter(Boolean))].sort();
+  $('siteList').innerHTML = ''; sites.forEach(x => { const o=document.createElement('option'); o.value=x; $('siteList').appendChild(o); });
 }
 function drawNotes(){
   const q = $('noteSearch').value.trim().toLowerCase();
   const list = $('noteList'); list.innerHTML='';
-  const shown = notes.filter(n => !q || (n.title+' '+n.body).toLowerCase().includes(q));
+  const shown = notes.filter(n => !q || [n.site, n.title, toText(n.body), ...(n.issues||[]).map(i=>toText(i.html))].join(' ').toLowerCase().includes(q));
   $('noteEmpty').textContent = notes.length ? 'No notes match your search.' : 'No notes yet. Tap New note to start one.';
   $('noteEmpty').classList.toggle('hidden', shown.length>0);
   shown.forEach(n => {
     const li=document.createElement('li'), b=document.createElement('button'); b.className='note-item';
-    const firstLine = n.body.split('\n').find(l=>l.trim()) || '';
-    const t=document.createElement('b'); t.textContent = n.title || firstLine || 'Untitled';
-    const p=document.createElement('span'); p.textContent = n.title ? firstLine : (n.body.split('\n').filter(l=>l.trim())[1] || '');
+    if (n.site){ const st=document.createElement('span'); st.className='site-tag'; st.style.display='inline-block'; st.textContent=n.site; b.appendChild(st); }
+    const issues = n.issues || [], open = issues.filter(i=>!i.done).length;
+    const bodyText = toText(n.body).trim();
+    const t=document.createElement('b'); t.textContent = n.title || (issues[0] ? toText(issues[0].html) : '') || bodyText.split('\n')[0] || 'Untitled';
+    const p=document.createElement('span'); p.textContent = issues.length ? `${issues.length} issue${issues.length>1?'s':''}` + (bodyText ? ' · ' + bodyText : '') : bodyText;
     const d=document.createElement('small');
     if (n.pinned){ const pt=document.createElement('span'); pt.className='pin-tag'; pt.style.display='inline'; pt.textContent='Pinned'; d.appendChild(pt); }
     d.append(new Date(n.updated_at).toLocaleDateString(undefined,{day:'numeric',month:'short',year:'numeric'}));
+    if (open){ const o=document.createElement('span'); o.className='open-tag'; o.style.display='inline'; o.textContent=`${open} open`; d.appendChild(o); }
     b.append(t,p,d); b.onclick=()=>openNote(n); li.appendChild(b); list.appendChild(li);
   });
 }
 $('noteSearch').oninput = drawNotes;
-$('noteNew').onclick = () => openNote({ id:null, title:'', body:'', pinned:false });
+$('noteNew').onclick = () => openNote({ id:null, site:'', title:'', body:'', issues:[], pinned:false });
 
 function openNote(n){
-  curNote = { ...n };
-  $('noteTitle').value = n.title; $('noteBody').value = n.body;
+  curNote = { ...n, issues: (n.issues||[]).map(i => ({...i})) };
+  $('noteSite').value = n.site || '';
+  $('noteTitle').value = n.title || '';
+  $('noteBody').innerHTML = bodyHtml(n.body);
+  drawIssues();
   $('notePin').textContent = n.pinned ? 'Unpin' : 'Pin';
   $('noteDel').classList.toggle('hidden', !n.id);
   $('noteSave').textContent = n.id ? 'Saved' : '';
   $('noteListView').classList.add('hidden'); $('noteEditor').classList.remove('hidden');
-  if (!n.id) $('noteBody').focus();
+  window.scrollTo(0,0);
+  if (!n.id) $('noteSite').focus();
 }
 function closeNote(){ curNote=null; $('noteEditor').classList.add('hidden'); $('noteListView').classList.remove('hidden'); }
+
+/* issues */
+function drawIssues(focusIndex){
+  const ul = $('issueList'); ul.innerHTML='';
+  curNote.issues.forEach((it, i) => {
+    const li=document.createElement('li'); li.className='issue'+(it.done?' done':'');
+    const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=!!it.done; cb.setAttribute('aria-label','Mark issue fixed');
+    cb.onchange=()=>{ it.done=cb.checked; li.classList.toggle('done', it.done); countIssues(); queueNoteSave(); };
+    const ed=document.createElement('div'); ed.className='rich'; ed.contentEditable='true'; ed.dataset.placeholder='Describe the issue…';
+    ed.innerHTML = clean(it.html||'');
+    ed.oninput=()=>{ it.html = ed.innerHTML; queueNoteSave(); };
+    ed.onkeydown=e=>{
+      if (e.key==='Enter' && !e.shiftKey){ e.preventDefault(); curNote.issues.splice(i+1,0,{html:'',done:false}); drawIssues(i+1); }
+      if (e.key==='Backspace' && !ed.textContent && curNote.issues.length>1){ e.preventDefault(); curNote.issues.splice(i,1); drawIssues(Math.max(0,i-1)); queueNoteSave(); }
+    };
+    const x=document.createElement('button'); x.className='x'; x.textContent='×'; x.setAttribute('aria-label','Remove issue');
+    x.onclick=()=>{ curNote.issues.splice(i,1); drawIssues(); queueNoteSave(); };
+    li.append(cb, ed, x); ul.appendChild(li);
+    if (i===focusIndex) setTimeout(()=>ed.focus(),0);
+  });
+  countIssues();
+}
+function countIssues(){
+  const all=curNote.issues.length, open=curNote.issues.filter(i=>!i.done).length;
+  $('issueCount').textContent = all ? `${open} open · ${all-open} fixed` : '';
+}
+$('issueAdd').onclick = () => { curNote.issues.push({ html:'', done:false }); drawIssues(curNote.issues.length-1); };
+
+/* formatting toolbar: works on whatever text you've selected in issues or notes */
+document.execCommand && (()=>{ try{ document.execCommand('styleWithCSS', false, true); }catch(e){} })();
+$('toolbar').addEventListener('pointerdown', e => { if (e.target.closest('button')) e.preventDefault(); });
+$('toolbar').addEventListener('click', e => {
+  const btn = e.target.closest('button'); if (!btn) return;
+  const sel = window.getSelection();
+  const inEditor = sel.rangeCount && $('noteEditor').contains(sel.anchorNode) && sel.anchorNode.parentElement?.closest('.rich');
+  if (!inEditor){ $('noteSave').textContent='Select some text in an issue or the notes first.'; return; }
+  try{ document.execCommand('styleWithCSS', false, true); }catch(_){}
+  if (btn.dataset.cmd) document.execCommand(btn.dataset.cmd, false, null);
+  if (btn.dataset.color) document.execCommand('foreColor', false, btn.dataset.color === 'inherit' ? getComputedStyle(document.body).color : btn.dataset.color);
+  if (btn.dataset.hl) document.execCommand('hiliteColor', false, btn.dataset.hl);
+  const ed = sel.anchorNode.parentElement.closest('.rich');
+  ed.dispatchEvent(new Event('input'));
+});
+
 function queueNoteSave(){ $('noteSave').textContent='Saving…'; clearTimeout(noteTimer); noteTimer=setTimeout(saveNote,700); }
 function flushNoteSave(){ if (noteTimer){ clearTimeout(noteTimer); noteTimer=null; return saveNote(); } }
+$('noteSite').oninput = queueNoteSave;
 $('noteTitle').oninput = queueNoteSave;
 $('noteBody').oninput = queueNoteSave;
 
@@ -456,9 +584,11 @@ async function saveNote(){
   noteTimer = null;
   if (!curNote) return;
   const n = curNote;
-  n.title = $('noteTitle').value.trim(); n.body = $('noteBody').value;
-  if (!n.id && !n.title && !n.body.trim()){ $('noteSave').textContent=''; return; }
-  const row = { title:n.title, body:n.body, pinned:n.pinned, updated_at:new Date().toISOString() };
+  n.site = $('noteSite').value.trim(); n.title = $('noteTitle').value.trim();
+  n.body = clean($('noteBody').innerHTML);
+  const issues = n.issues.map(i => ({ html: clean(i.html), done: !!i.done })).filter(i => toText(i.html).trim());
+  if (!n.id && !n.site && !n.title && !toText(n.body).trim() && !issues.length){ $('noteSave').textContent=''; return; }
+  const row = { site:n.site, title:n.title, body:n.body, issues, pinned:n.pinned, updated_at:new Date().toISOString() };
   const res = n.id
     ? await sb.from('notes').update(row).eq('id', n.id).select().single()
     : await sb.from('notes').insert({ ...row, user_id:user.id }).select().single();
