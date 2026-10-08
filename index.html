@@ -160,6 +160,17 @@ button{cursor:pointer}
 .pdf-site li.done .tx{text-decoration:line-through;color:#8a90a3}
 .pdf-other h2{font:600 16px "Manrope",Arial,sans-serif;margin:18px 0 6px}
 .pdf-sheet [style*="background-color"]{color:#1C2238;padding:0 2px;border-radius:2px}
+.shared-banner{background:var(--lamp-soft);color:var(--lamp-ink);border-radius:10px;padding:10px 12px;font-size:14px;margin-bottom:10px}
+.share-panel{border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:14px;background:var(--bg)}
+.share-panel h3{font:600 16px var(--sans);margin:0 0 10px}
+.share-list{list-style:none;margin:0 0 10px;padding:0;display:flex;flex-direction:column;gap:8px}
+.share-list li{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+.share-list .who{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;font-size:14px}
+.share-list select{border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:6px;font-size:13px}
+.share-row{display:grid;grid-template-columns:1fr auto;gap:8px;margin-top:8px}
+.list-h{font:600 13px var(--sans);color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin:18px 2px 0}
+.from-tag{display:inline-block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:4px}
+.readonly .toolbar,.readonly .x,.readonly .add-point,.readonly .site-del,.readonly #siteAdd{display:none!important}
 /* notifications bar */
 .notify{margin-top:18px;display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:14px;background:var(--lamp-soft);color:var(--lamp-ink)}
 .notify p{margin:0;flex:1;font-size:14px}
@@ -238,10 +249,24 @@ button{cursor:pointer}
         <div class="ed-bar">
           <button class="link" id="noteBack">‹ All notes</button>
           <div class="right">
+            <button class="link" id="noteShare">Share</button>
             <button class="link" id="notePdf">PDF</button>
             <button class="link" id="notePin">Pin</button>
             <button class="link danger" id="noteDel">Delete</button>
           </div>
+        </div>
+        <div id="sharedBanner" class="shared-banner hidden"></div>
+        <div id="sharePanel" class="share-panel hidden">
+          <h3>Who can see this note</h3>
+          <ul id="shareList" class="share-list"></ul>
+          <p id="shareNone" class="empty" style="margin:0 0 10px">Only you. Add someone below.</p>
+          <input id="shareEmail" class="input" type="email" placeholder="Their email address" autocomplete="off">
+          <div class="share-row">
+            <select id="shareMode" class="input"><option value="view">Can view only</option><option value="edit">Can view and edit</option></select>
+            <button id="shareBtn" class="btn small">Share</button>
+          </div>
+          <div class="msg" id="shareMsg" role="status"></div>
+          <button class="link" id="shareClose">Done</button>
         </div>
         <input id="noteTitle" class="title-in" placeholder="List name, e.g. SLA issues" maxlength="160">
         <datalist id="siteList"></datalist>
@@ -321,7 +346,10 @@ $('authBtn').onclick = async () => {
     : await sb.auth.signInWithPassword({ email, password });
   $('authBtn').disabled = false;
   if (error) { m.className='msg err'; m.textContent = error.message; return; }
-  if (signUp && !data.session) m.textContent = 'Check your email and tap the confirmation link, then sign in here.';
+  if (signUp && !data.session){
+    const r = await sb.auth.signInWithPassword({ email, password });
+    if (r.error){ m.textContent = 'Account created. Tap "Already have an account? Sign in" and sign in.'; }
+  }
 };
 $('signOut').onclick = () => sb.auth.signOut();
 
@@ -508,11 +536,20 @@ function clean(html){
 const toText = html => { const d=document.createElement('div'); d.innerHTML = html||''; return d.textContent || ''; };
 const bodyHtml = b => !b ? '' : (/<[a-z][\s\S]*>/i.test(b) ? clean(b) : b.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/\n/g,'<br>'));
 
+let shareInfo = {}, sharerEmail = {};
 async function loadNotes(){
-  const { data, error } = await sb.from('notes').select('*').order('pinned',{ascending:false}).order('updated_at',{ascending:false});
-  if (error){ $('noteEmpty').textContent='Couldn\'t load notes. Check your connection.'; $('noteEmpty').classList.remove('hidden'); return; }
-  notes = data || []; drawNotes(); drawSiteList();
+  const [r, sh, em] = await Promise.all([
+    sb.from('notes').select('*').order('pinned',{ascending:false}).order('updated_at',{ascending:false}),
+    sb.from('note_shares').select('note_id,can_edit').eq('shared_with', user.id),
+    sb.rpc('sharer_emails')
+  ]);
+  if (r.error){ $('noteEmpty').textContent='Couldn\'t load notes. Check your connection.'; $('noteEmpty').classList.remove('hidden'); return; }
+  notes = r.data || [];
+  shareInfo = {}; (sh.data||[]).forEach(x => shareInfo[x.note_id] = x.can_edit);
+  sharerEmail = {}; (em.data||[]).forEach(x => sharerEmail[x.user_id] = x.email);
+  drawNotes(); drawSiteList();
 }
+const isMine = n => !n.user_id || n.user_id === user.id;
 function drawSiteList(){
   const sites = [...new Set(notes.flatMap(n => groupsOf(n).map(g => (g.site||'').trim())).filter(Boolean))].sort();
   $('siteList').innerHTML = ''; sites.forEach(x => { const o=document.createElement('option'); o.value=x; $('siteList').appendChild(o); });
@@ -529,15 +566,20 @@ function drawNotes(){
   const shown = notes.filter(n => !q || hay(n).includes(q));
   $('noteEmpty').textContent = notes.length ? 'No notes match your search.' : 'No notes yet. Tap New note to start one.';
   $('noteEmpty').classList.toggle('hidden', shown.length>0);
-  shown.forEach(n => {
+  const mine = shown.filter(isMine), theirs = shown.filter(n => !isMine(n));
+  const heading = txt => { const h=document.createElement('li'); h.className='list-h'; h.textContent=txt; list.appendChild(h); };
+  if (theirs.length && mine.length) heading('My notes');
+  [...mine, ...theirs].forEach((n, idx) => {
+    if (idx === mine.length && theirs.length) heading('Shared with me');
     const li=document.createElement('li'), b=document.createElement('button'); b.className='note-item';
+    if (!isMine(n)){ const f=document.createElement('span'); f.className='from-tag'; f.style.display='block'; f.textContent = `From ${sharerEmail[n.user_id] || 'someone'} · ${shareInfo[n.id] ? 'can edit' : 'view only'}`; b.appendChild(f); }
     const groups = groupsOf(n), pts = groups.flatMap(g=>g.points), open = pts.filter(p=>!p.done).length;
     const bodyText = toText(n.body).trim();
     const t=document.createElement('b'); t.textContent = n.title || groups[0]?.site || bodyText.split('\n')[0] || 'Untitled';
     const p=document.createElement('span');
     p.textContent = groups.length ? `${groups.length} site${groups.length>1?'s':''}: ` + groups.map(g=>g.site||'Unnamed').join(', ') : bodyText;
     const d=document.createElement('small');
-    if (n.pinned){ const pt=document.createElement('span'); pt.className='pin-tag'; pt.style.display='inline'; pt.textContent='Pinned'; d.appendChild(pt); }
+    if (n.pinned && isMine(n)){ const pt=document.createElement('span'); pt.className='pin-tag'; pt.style.display='inline'; pt.textContent='Pinned'; d.appendChild(pt); }
     d.append(new Date(n.updated_at).toLocaleDateString(undefined,{day:'numeric',month:'short',year:'numeric'}));
     if (open){ const o=document.createElement('span'); o.className='open-tag'; o.style.display='inline'; o.textContent=`${open} open`; d.appendChild(o); }
     b.append(t,p,d); b.onclick=()=>openNote(n); li.appendChild(b); list.appendChild(li);
@@ -546,13 +588,25 @@ function drawNotes(){
 $('noteSearch').oninput = drawNotes;
 $('noteNew').onclick = () => openNote({ id:null, site:'', title:'', body:'', issues:[{ site:'', points:[{html:'',done:false}] }], pinned:false });
 
+let canEdit = true, ownNote = true;
 function openNote(n){
+  ownNote = isMine(n); canEdit = ownNote || !!shareInfo[n.id];
   curNote = { ...n, groups: groupsOf(n).map(g => ({ site:g.site||'', points:(g.points||[]).map(p=>({...p})) })) };
+  $('noteEditor').classList.toggle('readonly', !canEdit);
+  $('noteTitle').disabled = !canEdit;
+  $('noteBody').contentEditable = String(canEdit);
+  $('noteShare').classList.toggle('hidden', !ownNote);
+  $('notePin').classList.toggle('hidden', !ownNote);
+  $('sharePanel').classList.add('hidden');
+  $('sharedBanner').classList.toggle('hidden', ownNote);
+  if (!ownNote) $('sharedBanner').textContent = `Shared with you by ${sharerEmail[n.user_id] || 'someone'}. ` + (canEdit ? 'You can edit it; changes are saved to their note.' : 'You can view it and download the PDF.');
+  $('noteDel').textContent = ownNote ? 'Delete' : 'Remove';
   $('noteTitle').value = n.title || '';
   $('noteBody').innerHTML = bodyHtml(n.body);
   drawSites();
   $('notePin').textContent = n.pinned ? 'Unpin' : 'Pin';
   $('noteDel').classList.toggle('hidden', !n.id);
+  if (n.id && ownNote) refreshPeople();
   $('noteSave').textContent = n.id ? 'Saved' : '';
   $('noteListView').classList.add('hidden'); $('noteEditor').classList.remove('hidden');
   window.scrollTo(0,0);
@@ -568,7 +622,7 @@ function drawSites(focus){
     const head=document.createElement('div'); head.className='site-head';
     const num=document.createElement('span'); num.className='site-num'; num.textContent=(gi+1)+'.';
     const name=document.createElement('input'); name.className='site-name'; name.value=g.site; name.placeholder='Site name'; name.setAttribute('list','siteList'); name.maxLength=120;
-    name.oninput=()=>{ g.site=name.value; queueNoteSave(); };
+    name.disabled=!canEdit; name.oninput=()=>{ g.site=name.value; queueNoteSave(); };
     name.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); if(!g.points.length) g.points.push({html:'',done:false}); drawSites({gi, pi:0}); } };
     const meta=document.createElement('span'); meta.className='site-meta';
     const del=document.createElement('button'); del.className='site-del'; del.textContent='×'; del.setAttribute('aria-label','Remove site');
@@ -578,9 +632,9 @@ function drawSites(focus){
     const ul=document.createElement('ul'); ul.className='issue-list';
     g.points.forEach((it, pi) => {
       const row=document.createElement('li'); row.className='issue'+(it.done?' done':'');
-      const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=!!it.done; cb.setAttribute('aria-label','Mark done');
+      const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=!!it.done; cb.disabled=!canEdit; cb.setAttribute('aria-label','Mark done');
       cb.onchange=()=>{ it.done=cb.checked; row.classList.toggle('done', it.done); countAll(); queueNoteSave(); };
-      const ed=document.createElement('div'); ed.className='rich'; ed.contentEditable='true'; ed.dataset.placeholder='Point / issue…';
+      const ed=document.createElement('div'); ed.className='rich'; ed.contentEditable=String(canEdit); ed.dataset.placeholder='Point / issue…';
       ed.innerHTML=clean(it.html||'');
       ed.oninput=()=>{ it.html=ed.innerHTML; queueNoteSave(); };
       ed.onkeydown=e=>{
@@ -628,7 +682,7 @@ $('toolbar').addEventListener('click', e => {
   ed.dispatchEvent(new Event('input'));
 });
 
-function queueNoteSave(){ $('noteSave').textContent='Saving…'; clearTimeout(noteTimer); noteTimer=setTimeout(saveNote,700); }
+function queueNoteSave(){ if (!canEdit) return; $('noteSave').textContent='Saving…'; clearTimeout(noteTimer); noteTimer=setTimeout(saveNote,700); }
 function flushNoteSave(){ if (noteTimer){ clearTimeout(noteTimer); noteTimer=null; return saveNote(); } }
 $('noteTitle').oninput = queueNoteSave;
 $('noteBody').oninput = queueNoteSave;
@@ -643,7 +697,8 @@ async function saveNote(){
     .map(g => ({ site:(g.site||'').trim(), points:g.points.map(p => ({ html:clean(p.html), done:!!p.done })).filter(p => toText(p.html).trim()) }))
     .filter(g => g.site || g.points.length);
   if (!n.id && !n.title && !toText(n.body).trim() && !issues.length){ $('noteSave').textContent=''; return; }
-  const row = { site:'', title:n.title, body:n.body, issues, pinned:n.pinned, updated_at:new Date().toISOString() };
+  const row = { site:'', title:n.title, body:n.body, issues, updated_at:new Date().toISOString() };
+  if (ownNote) row.pinned = !!n.pinned;
   const res = n.id
     ? await sb.from('notes').update(row).eq('id', n.id).select().single()
     : await sb.from('notes').insert({ ...row, user_id:user.id }).select().single();
@@ -655,11 +710,59 @@ async function saveNote(){
 $('noteBack').onclick = async () => { await flushNoteSave(); closeNote(); loadNotes(); };
 $('notePin').onclick = () => { if (!curNote) return; curNote.pinned = !curNote.pinned; $('notePin').textContent = curNote.pinned?'Unpin':'Pin'; queueNoteSave(); };
 $('noteDel').onclick = async () => {
-  if (!curNote?.id || !confirm('Delete this note?')) return;
+  if (!curNote?.id) return;
+  if (!ownNote){
+    if (!confirm('Remove this shared note from your list? It stays with the owner.')) return;
+    const { error } = await sb.from('note_shares').delete().eq('note_id', curNote.id).eq('shared_with', user.id);
+    if (error){ $('noteSave').textContent='Couldn\'t remove. Try again.'; return; }
+    notes = notes.filter(x=>x.id!==curNote.id); closeNote(); drawNotes(); return;
+  }
+  if (!confirm('Delete this note? Anyone you shared it with will lose it too.')) return;
   clearTimeout(noteTimer); noteTimer=null;
   const { error } = await sb.from('notes').delete().eq('id', curNote.id);
   if (error){ $('noteSave').textContent='Couldn\'t delete. Try again.'; return; }
   notes = notes.filter(x=>x.id!==curNote.id); closeNote(); drawNotes();
+};
+
+/* ---------- sharing ---------- */
+async function refreshPeople(){
+  if (!curNote?.id) return;
+  const { data } = await sb.rpc('note_people', { p_note: curNote.id });
+  const people = data || [];
+  const ul = $('shareList'); ul.innerHTML = '';
+  $('shareNone').classList.toggle('hidden', people.length > 0);
+  $('noteShare').textContent = people.length ? `Shared (${people.length})` : 'Share';
+  people.forEach(p => {
+    const li=document.createElement('li');
+    const who=document.createElement('span'); who.className='who'; who.textContent=p.email;
+    const sel=document.createElement('select');
+    sel.innerHTML='<option value="view">View</option><option value="edit">Edit</option>'; sel.value=p.can_edit?'edit':'view';
+    sel.onchange=async()=>{ const { error } = await sb.rpc('share_note',{ p_note:curNote.id, p_email:p.email, p_can_edit: sel.value==='edit' }); $('shareMsg').textContent = error ? 'Couldn\'t change. Try again.' : `${p.email} can now ${sel.value==='edit'?'edit':'only view'}.`; };
+    const rm=document.createElement('button'); rm.className='x'; rm.textContent='×'; rm.setAttribute('aria-label','Stop sharing with '+p.email);
+    rm.onclick=async()=>{ const { error } = await sb.from('note_shares').delete().eq('note_id',curNote.id).eq('shared_with',p.user_id); $('shareMsg').textContent = error ? 'Couldn\'t remove. Try again.' : `${p.email} can no longer see this note.`; refreshPeople(); };
+    li.append(who, sel, rm); ul.appendChild(li);
+  });
+}
+$('noteShare').onclick = async () => {
+  if (!$('sharePanel').classList.contains('hidden')){ $('sharePanel').classList.add('hidden'); return; }
+  await flushNoteSave();
+  if (!curNote?.id){ $('noteSave').textContent='Write something in the note first, then share it.'; return; }
+  $('shareMsg').textContent=''; $('sharePanel').classList.remove('hidden'); refreshPeople();
+};
+$('shareClose').onclick = () => $('sharePanel').classList.add('hidden');
+$('shareBtn').onclick = async () => {
+  const email = $('shareEmail').value.trim(), m = $('shareMsg'); m.className='msg';
+  if (!email){ m.className='msg err'; m.textContent='Type their email address.'; return; }
+  $('shareBtn').disabled = true;
+  const { error } = await sb.rpc('share_note', { p_note: curNote.id, p_email: email, p_can_edit: $('shareMode').value==='edit' });
+  $('shareBtn').disabled = false;
+  if (error){
+    m.className='msg err';
+    m.textContent = /no_account/.test(error.message) ? `No account for ${email} yet. Send them ${location.href.split('#')[0]} to create one, then share again.`
+      : /self/.test(error.message) ? 'That\'s your own email.' : 'Couldn\'t share. Try again.';
+    return;
+  }
+  $('shareEmail').value=''; m.textContent = `Shared with ${email}.`; refreshPeople();
 };
 window.addEventListener('pagehide', flushNoteSave);
 
